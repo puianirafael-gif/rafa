@@ -8,7 +8,7 @@ import React, { useEffect, useMemo, useState } from "react";
  */
 
 const OWNER_ENDPOINT = ""; // opcional: ex. "https://script.google.com/macros/s/SEU_ID/exec"
-const EMAIL_ENDPOINT = "https://formsubmit.co/ajax/ef82f91d95387fdff44e428297b29048"; // token do FormSubmit
+const EMAIL_ENDPOINT = "https://formsubmit.co/ajax/puianirafael@gmail.com"; // token do FormSubmit
 
 // Base canônica (não mexer na ordem aqui; a UI embaralha)
 const QUESTIONS_BASE = [
