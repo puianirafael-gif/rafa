@@ -1,15 +1,17 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 /**
- * One-page DISC assessment site
- * Agora com envio por e-mail via FormSubmit (AJAX) + envio opcional para OWNER_ENDPOINT
+ * DISC one-page (shuffle total)
+ * - Embaralha perguntas e também a ordem das alternativas
+ * - A letra A/B/C/D exibida é só visual; salvamos a CHAVE ORIGINAL para o cálculo
+ * - Envio via FormSubmit (AJAX) + opcional OWNER_ENDPOINT
  */
 
 const OWNER_ENDPOINT = ""; // opcional: ex. "https://script.google.com/macros/s/SEU_ID/exec"
-// 🔔 troque pelo seu e-mail para receber as respostas
-const EMAIL_ENDPOINT = "https://formsubmit.co/ajax/puianirafael@gmail.com"; // ex.: joao@empresa.com
+const EMAIL_ENDPOINT = "https://formsubmit.co/ajax/ef82f91d95387fdff44e428297b29048"; // token do FormSubmit
 
-const QUESTIONS = [
+// Base canônica (não mexer na ordem aqui; a UI embaralha)
+const QUESTIONS_BASE = [
   { q:1, text:"Quando surge um desafio, eu geralmente...", options:[
     {key:"A", label:"assumo a liderança e parto para a ação"},
     {key:"B", label:"motivo o grupo e gero entusiasmo"},
@@ -181,36 +183,59 @@ const QUESTIONS = [
 ];
 
 const altToProfile = { A:"D", B:"I", C:"S", D:"C" };
-function classNames(...cls){ return cls.filter(Boolean).join(" "); }
+
+// util: Fisher–Yates
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function classNames(...c){ return c.filter(Boolean).join(" "); }
 
 export default function App(){
   const [stage, setStage] = useState("home");
   const [sending, setSending] = useState(false);
   const [form, setForm] = useState({ nome:"", email:"", whatsapp:"", answers:{} });
 
+  // perguntas embaralhadas + alternativas embaralhadas (uma vez por visita)
+  const [questions, setQuestions] = useState([]);
+  useEffect(()=>{
+    const qShuffled = shuffle(QUESTIONS_BASE).map(q => {
+      // embaralhar alternativas; manter a CHAVE ORIGINAL num campo "orig"
+      const opts = shuffle(q.options).map((opt, idx) => ({
+        keyOriginal: opt.key,   // usado no cálculo
+        label: opt.label,
+        // letra visual muda conforme a posição embaralhada
+        letter: ["A","B","C","D"][idx]
+      }));
+      return { ...q, options: opts };
+    });
+    setQuestions(qShuffled);
+  }, []);
+
   const progress = useMemo(()=>{
     const answered = Object.values(form.answers).filter(Boolean).length;
-    return Math.round((answered / QUESTIONS.length) * 100);
-  }, [form.answers]);
+    return questions.length ? Math.round((answered / questions.length) * 100) : 0;
+  }, [form.answers, questions]);
 
+  // cálculo baseado na CHAVE ORIGINAL salva em answers[q]
   const scores = useMemo(()=>{
     const map = { D:0, I:0, S:0, C:0 };
-    QUESTIONS.forEach(q=>{
-      const a = form.answers[q.q];
-      if(!a) return;
-      map[altToProfile[a]] += 1;
+    questions.forEach(q=>{
+      const originalKey = form.answers[q.q]; // "A"/"B"/"C"/"D" (original)
+      if(!originalKey) return;
+      map[altToProfile[originalKey]] += 1;
     });
     return map;
-  }, [form.answers]);
+  }, [form.answers, questions]);
 
-  const primario = useMemo(()=>{
+  const [primario, secundario] = useMemo(()=>{
     const arr = Object.entries(scores).sort((a,b)=>b[1]-a[1]);
-    return arr[0]?.[0];
-  }, [scores]);
-
-  const secundario = useMemo(()=>{
-    const arr = Object.entries(scores).sort((a,b)=>b[1]-a[1]);
-    return arr[1]?.[0];
+    return [arr[0]?.[0], arr[1]?.[0]];
   }, [scores]);
 
   async function handleSubmit(e){
@@ -218,27 +243,32 @@ export default function App(){
     if(!form.nome || !form.email || !form.whatsapp){
       alert("Preencha nome, e-mail e WhatsApp."); return;
     }
-    const unanswered = QUESTIONS.filter(q=>!form.answers[q.q]).length;
+    const unanswered = questions.filter(q=>!form.answers[q.q]).length;
     if(unanswered>0){
       if(!confirm(`Faltam ${unanswered} pergunta(s). Deseja enviar assim mesmo?`)) return;
     }
 
-    // payload completo em JSON (para você/servidor)
+    // construir itens com a resposta original
+    const itens = questions.map(q => ({
+      q: q.q,
+      resp: form.answers[q.q] || null  // "A/B/C/D" (original)
+    }));
+
     const payload = {
       nome: form.nome,
       email: form.email,
       whatsapp: form.whatsapp,
       scores, primario, secundario,
-      itens: QUESTIONS.map(q=>({ q:q.q, resp: form.answers[q.q] || null })),
+      itens,
       submittedAt: new Date().toISOString(),
       source: "site-disc-onepage",
     };
 
-    // payload “legível” por e-mail (FormSubmit)
     const emailData = {
       _subject: "Novo resultado do Teste Comportamental (site)",
       _template: "table",
       _captcha: "false",
+      _replyto: form.email,
       Nome: form.nome,
       Email_do_participante: form.email,
       WhatsApp: form.whatsapp,
@@ -248,24 +278,24 @@ export default function App(){
       Pontuacao_I: String(scores.I),
       Pontuacao_S: String(scores.S),
       Pontuacao_C: String(scores.C),
-      Respostas_JSON: JSON.stringify(payload.itens),
+      Respostas_JSON: JSON.stringify(itens),
     };
 
     setSending(true);
     try{
-      // envia e-mail via FormSubmit (AJAX)
-      if(EMAIL_ENDPOINT && EMAIL_ENDPOINT.includes("formsubmit.co")){
+      // e-mail via FormSubmit
+      if(EMAIL_ENDPOINT){
         const fd = new FormData();
-        Object.entries(emailData).forEach(([k,v])=> fd.append(k, v));
+        Object.entries(emailData).forEach(([k,v])=>fd.append(k,v));
         const r1 = await fetch(EMAIL_ENDPOINT, {
-          method: "POST",
-          headers: { "Accept": "application/json" },
+          method:"POST",
+          headers:{ Accept:"application/json" },
           body: fd
         });
         if(!r1.ok) throw new Error("Falha ao enviar e-mail.");
       }
 
-      // envia JSON para seu endpoint (opcional)
+      // servidor opcional
       if(OWNER_ENDPOINT){
         const r2 = await fetch(OWNER_ENDPOINT, {
           method:"POST",
@@ -275,8 +305,8 @@ export default function App(){
         if(!r2.ok) throw new Error("Falha ao enviar para o servidor.");
       }
 
-      // fallback local se nenhum destino foi configurado
       if(!EMAIL_ENDPOINT && !OWNER_ENDPOINT){
+        // fallback local
         const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -285,7 +315,7 @@ export default function App(){
       }
 
       setStage("thanks");
-      window.scrollTo({ top:0, behavior:"smooth" });
+      window.scrollTo({top:0,behavior:"smooth"});
     } catch(err){
       alert(err?.message || "Não foi possível enviar. Tente novamente.");
     } finally{
@@ -296,11 +326,12 @@ export default function App(){
   function resetToHome(){
     setForm({ nome:"", email:"", whatsapp:"", answers:{} });
     setStage("home");
+    window.scrollTo({top:0,behavior:"smooth"});
   }
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100">
-      <Header onStart={()=>{ setStage("test"); setTimeout(()=>window.scrollTo({top:0,behavior:"smooth"}),50); }} />
+      <Header onStart={()=>{ setStage("test"); window.scrollTo({top:0,behavior:"smooth"}); }} />
 
       {stage==="home" && (
         <main>
@@ -317,7 +348,7 @@ export default function App(){
         <main>
           <section className="max-w-4xl mx-auto px-6 py-12">
             <h2 className="text-3xl md:text-4xl font-semibold">Teste Comportamental (DISC)</h2>
-            <p className="mt-2 text-neutral-300">Leva 7–10 minutos. Marque a alternativa que mais representa você na maior parte do tempo. Não há certo ou errado.</p>
+            <p className="mt-2 text-neutral-300">Leva 7–10 minutos. Marque a alternativa que mais representa você. As opções são embaralhadas em cada pergunta.</p>
 
             <form className="mt-8 space-y-8" onSubmit={handleSubmit}>
               <div className="grid md:grid-cols-3 gap-4 bg-neutral-900/60 p-4 rounded-2xl border border-neutral-800">
@@ -337,23 +368,30 @@ export default function App(){
               </div>
 
               <div className="space-y-6">
-                {QUESTIONS.map(item=>(
+                {questions.map(item=>(
                   <fieldset key={item.q} className="bg-neutral-900/40 rounded-2xl border border-neutral-800 p-4">
                     <legend className="font-medium text-neutral-100 mb-3">{item.q}. {item.text}</legend>
                     <div className="grid md:grid-cols-2 gap-3">
-                      {item.options.map(opt=>{
-                        const id = `q${item.q}-${opt.key}`;
-                        const checked = form.answers[item.q] === opt.key;
+                      {item.options.map((opt, idx)=>{
+                        const id = `q${item.q}-${idx}`;
+                        const checked = form.answers[item.q] === opt.keyOriginal;
                         return (
                           <label key={id} htmlFor={id} className={classNames(
                             "cursor-pointer border rounded-xl px-4 py-3",
                             checked ? "border-emerald-500 bg-emerald-500/10" : "border-neutral-800 hover:border-neutral-700"
                           )}>
-                            <input id={id} name={`q${item.q}`} type="radio" className="mr-2 align-middle accent-emerald-500"
+                            <input
+                              id={id}
+                              name={`q${item.q}`}
+                              type="radio"
+                              className="mr-2 align-middle accent-emerald-500"
                               checked={checked}
-                              onChange={()=>setForm(f=>({...f, answers:{...f.answers, [item.q]: opt.key}}))}
+                              onChange={()=>setForm(f=>({
+                                ...f,
+                                answers:{...f.answers, [item.q]: opt.keyOriginal} // salva chave original A/B/C/D
+                              }))}
                             />
-                            <span className="text-neutral-200 font-medium mr-2">{opt.key})</span>
+                            <span className="text-neutral-200 font-medium mr-2">{opt.letter})</span>
                             <span className="text-neutral-300">{opt.label}</span>
                           </label>
                         );
@@ -378,7 +416,7 @@ export default function App(){
                   <div className="bg-neutral-900 rounded-xl p-3 border border-neutral-800">S: <b>{scores.S}</b></div>
                   <div className="bg-neutral-900 rounded-xl p-3 border border-neutral-800">C: <b>{scores.C}</b></div>
                 </div>
-                <p className="text-xs text-neutral-400 mt-2">Este painel é apenas para verificação local. O participante não recebe o resultado aqui.</p>
+                <p className="text-xs text-neutral-400 mt-2">As letras exibidas mudam a cada visita. O cálculo usa a alternativa original da metodologia.</p>
               </details>
             </form>
           </section>
@@ -391,7 +429,7 @@ export default function App(){
           <section className="max-w-3xl mx-auto px-6 py-24 text-center">
             <div className="mx-auto w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">✅</div>
             <h2 className="text-3xl md:text-4xl font-semibold mt-6">Obrigado! Recebemos suas respostas.</h2>
-            <p className="text-neutral-300 mt-3">Seu relatório personalizado será enviado no seu e-mail/WhatsApp em até <b>24 horas</b>. Fique de olho na caixa de entrada e no WhatsApp 😉</p>
+            <p className="text-neutral-300 mt-3">Seu relatório personalizado será enviado no seu e-mail/WhatsApp em até <b>24 horas</b>.</p>
             <button onClick={resetToHome} className="mt-8 px-6 py-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700">Voltar ao início</button>
           </section>
           <Footer />
@@ -497,7 +535,7 @@ function About(){
       <div className="grid md:grid-cols-2 gap-10 items-center">
         <div>
           <h2 className="text-3xl md:text-4xl font-semibold">Sobre a metodologia</h2>
-          <p className="text-neutral-300 mt-4">Utilizamos uma versão prática do modelo DISC (Dominância, Influência, Estabilidade e Conformidade) para mapear seu estilo de comportamento. O resultado é enviado individualmente e acompanhado de recomendações acionáveis.</p>
+          <p className="text-neutral-300 mt-4">Utilizamos uma versão prática do modelo DISC para mapear seu estilo de comportamento. O resultado é enviado individualmente e acompanhado de recomendações acionáveis.</p>
           <ul className="list-disc list-inside text-neutral-300 mt-4 space-y-1">
             <li>Instrumento de autoconhecimento (não é diagnóstico clínico).</li>
             <li>Relatório premium entregue em PDF.</li>
