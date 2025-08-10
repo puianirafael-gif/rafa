@@ -2,182 +2,177 @@ import React, { useMemo, useState } from "react";
 
 /**
  * One-page DISC assessment site
- * --------------------------------------------------------
- * ✅ Features
- * - Hero + Benefits + About + FAQ + Privacy
- * - 28-item DISC questionnaire (A/B/C/D -> D/I/S/C)
- * - Collects name, email, WhatsApp
- * - Calculates scores client-side (oculto ao participante)
- * - POST dos dados para OWNER_ENDPOINT (Apps Script / Zapier / Make / Formspree)
- * - Tela de agradecimento
+ * Agora com envio por e-mail via FormSubmit (AJAX) + envio opcional para OWNER_ENDPOINT
  */
 
-const OWNER_ENDPOINT = ""; // ex.: "https://script.google.com/macros/s/SEU_ID/exec"
+const OWNER_ENDPOINT = ""; // opcional: ex. "https://script.google.com/macros/s/SEU_ID/exec"
+// 🔔 troque pelo seu e-mail para receber as respostas
+const EMAIL_ENDPOINT = "https://formsubmit.co/ajax/puianirafael@gmail.com"; // ex.: joao@empresa.com
 
 const QUESTIONS = [
-  { q:1, text:"Quando surge um desafio, eu geralmente…", options:[
+  { q:1, text:"Quando surge um desafio, eu geralmente...", options:[
     {key:"A", label:"assumo a liderança e parto para a ação"},
     {key:"B", label:"motivo o grupo e gero entusiasmo"},
     {key:"C", label:"procuro manter o clima estável e ajudar"},
     {key:"D", label:"analiso dados e critérios antes de decidir"},
   ]},
-  { q:2, text:"Em reuniões, tendo a ser…", options:[
+  { q:2, text:"Em reuniões, tendo a ser...", options:[
     {key:"A", label:"direto e objetivo"},
     {key:"B", label:"comunicativo e envolvente"},
     {key:"C", label:"ouvinte atento e conciliador"},
     {key:"D", label:"cuidadoso e orientado a detalhes"},
   ]},
-  { q:3, text:"Meu foco principal no trabalho é…", options:[
+  { q:3, text:"Meu foco principal no trabalho é...", options:[
     {key:"A", label:"atingir metas rapidamente"},
     {key:"B", label:"criar conexões e parcerias"},
     {key:"C", label:"dar suporte e consistência"},
     {key:"D", label:"garantir qualidade e precisão"},
   ]},
-  { q:4, text:"Diante de mudanças inesperadas, eu…", options:[
+  { q:4, text:"Diante de mudanças inesperadas, eu...", options:[
     {key:"A", label:"decido rápido e ajusto o rumo"},
     {key:"B", label:"comunico e engajo os demais"},
     {key:"C", label:"busco estabilidade e segurança"},
     {key:"D", label:"investigo impactos e riscos"},
   ]},
-  { q:5, text:"Para resolver conflitos, eu…", options:[
+  { q:5, text:"Para resolver conflitos, eu...", options:[
     {key:"A", label:"confronto o problema de frente"},
     {key:"B", label:"uso carisma e persuasão"},
     {key:"C", label:"busco acordo pacífico"},
     {key:"D", label:"recorro a regras e fatos"},
   ]},
-  { q:6, text:"Ao receber feedback, eu…", options:[
+  { q:6, text:"Ao receber feedback, eu...", options:[
     {key:"A", label:"quero objetividade e soluções"},
     {key:"B", label:"prefiro encorajamento"},
     {key:"C", label:"valorizo empatia e respeito"},
     {key:"D", label:"aprecio feedback estruturado"},
   ]},
-  { q:7, text:"Em projetos, costumo…", options:[
+  { q:7, text:"Em projetos, costumo...", options:[
     {key:"A", label:"decidir e delegar"},
     {key:"B", label:"inspirar e influenciar"},
     {key:"C", label:"apoiar e colaborar"},
     {key:"D", label:"planejar e documentar"},
   ]},
-  { q:8, text:"Me descrevo como alguém…", options:[
+  { q:8, text:"Me descrevo como alguém...", options:[
     {key:"A", label:"competitivo"},
     {key:"B", label:"sociável"},
     {key:"C", label:"paciente"},
     {key:"D", label:"perfeccionista"},
   ]},
-  { q:9, text:"Quando algo dá errado, eu…", options:[
+  { q:9, text:"Quando algo dá errado, eu...", options:[
     {key:"A", label:"assumo e corrijo rápido"},
     {key:"B", label:"reanimo a equipe"},
     {key:"C", label:"acalmo o ambiente"},
     {key:"D", label:"reviso o processo"},
   ]},
-  { q:10, text:"Para comunicar ideias, eu…", options:[
+  { q:10, text:"Para comunicar ideias, eu...", options:[
     {key:"A", label:"vou direto ao ponto"},
     {key:"B", label:"conto histórias"},
     {key:"C", label:"busco consenso"},
     {key:"D", label:"uso dados e lógica"},
   ]},
-  { q:11, text:"Diante de prazos curtos, eu…", options:[
+  { q:11, text:"Diante de prazos curtos, eu...", options:[
     {key:"A", label:"acelero e corto atalhos"},
     {key:"B", label:"peço ajuda e mobilizo"},
     {key:"C", label:"priorizo o essencial sem estresse"},
     {key:"D", label:"repriorizo e crio checklists"},
   ]},
-  { q:12, text:"Preferência de trabalho…", options:[
+  { q:12, text:"Preferência de trabalho...", options:[
     {key:"A", label:"autonomia para decidir"},
     {key:"B", label:"interação constante"},
     {key:"C", label:"rotina previsível"},
     {key:"D", label:"processos claros"},
   ]},
-  { q:13, text:"Sobre riscos, eu…", options:[
+  { q:13, text:"Sobre riscos, eu...", options:[
     {key:"A", label:"assumo riscos calculados"},
     {key:"B", label:"confio no timing e na rede"},
     {key:"C", label:"evito riscos desnecessários"},
     {key:"D", label:"só avanço com garantia"},
   ]},
-  { q:14, text:"Para aprender, eu…", options:[
+  { q:14, text:"Para aprender, eu...", options:[
     {key:"A", label:"pratico fazendo"},
     {key:"B", label:"aprendo com pessoas"},
     {key:"C", label:"observo e repito"},
     {key:"D", label:"estudo sistemas e manuais"},
   ]},
-  { q:15, text:"Em negociações, sou…", options:[
+  { q:15, text:"Em negociações, sou...", options:[
     {key:"A", label:"firme"},
     {key:"B", label:"envolvente"},
     {key:"C", label:"paciente"},
     {key:"D", label:"preciso"},
   ]},
-  { q:16, text:"Com novidades, eu…", options:[
+  { q:16, text:"Com novidades, eu...", options:[
     {key:"A", label:"testo rápido"},
     {key:"B", label:"apresento para o grupo"},
     {key:"C", label:"avalio impacto no time"},
     {key:"D", label:"comparo especificações"},
   ]},
-  { q:17, text:"Em imprevistos, eu…", options:[
+  { q:17, text:"Em imprevistos, eu...", options:[
     {key:"A", label:"tomo a frente"},
     {key:"B", label:"mantenho o ânimo"},
     {key:"C", label:"ofereço suporte"},
     {key:"D", label:"checo protocolos"},
   ]},
-  { q:18, text:"Quando lidero, eu…", options:[
+  { q:18, text:"Quando lidero, eu...", options:[
     {key:"A", label:"cobro resultados"},
     {key:"B", label:"inspiro e reconheço"},
     {key:"C", label:"protejo o time"},
     {key:"D", label:"organizo e padronizo"},
   ]},
-  { q:19, text:"Em decisões pessoais, eu…", options:[
+  { q:19, text:"Em decisões pessoais, eu...", options:[
     {key:"A", label:"ajo com rapidez"},
     {key:"B", label:"procuro opiniões"},
     {key:"C", label:"considero a harmonia"},
     {key:"D", label:"listo prós e contras"},
   ]},
-  { q:20, text:"Para motivação, eu…", options:[
+  { q:20, text:"Para motivação, eu...", options:[
     {key:"A", label:"gosto de desafios"},
     {key:"B", label:"de reconhecimento social"},
     {key:"C", label:"de estabilidade"},
     {key:"D", label:"de excelência técnica"},
   ]},
-  { q:21, text:"No dia a dia, eu…", options:[
+  { q:21, text:"No dia a dia, eu...", options:[
     {key:"A", label:"corto burocracias"},
     {key:"B", label:"conecto pessoas"},
     {key:"C", label:"mantenho rotinas"},
     {key:"D", label:"organizo informações"},
   ]},
-  { q:22, text:"Em feedbacks que dou, eu…", options:[
+  { q:22, text:"Em feedbacks que dou, eu...", options:[
     {key:"A", label:"sou franco"},
     {key:"B", label:"incentivo"},
     {key:"C", label:"cuido do clima"},
     {key:"D", label:"sou específico e objetivo"},
   ]},
-  { q:23, text:"Sobre regras, eu…", options:[
+  { q:23, text:"Sobre regras, eu...", options:[
     {key:"A", label:"questiono se travam resultados"},
     {key:"B", label:"adapto quando necessário"},
     {key:"C", label:"sigo para manter a paz"},
     {key:"D", label:"valorizo e cumpro"},
   ]},
-  { q:24, text:"Sob pressão, eu…", options:[
+  { q:24, text:"Sob pressão, eu...", options:[
     {key:"A", label:"acelero decisões"},
     {key:"B", label:"busco apoio"},
     {key:"C", label:"mantenho a calma"},
     {key:"D", label:"aumento o controle"},
   ]},
-  { q:25, text:"Na comunicação, eu…", options:[
+  { q:25, text:"Na comunicação, eu...", options:[
     {key:"A", label:"sou direto"},
     {key:"B", label:"sou expressivo"},
     {key:"C", label:"sou gentil"},
     {key:"D", label:"sou preciso"},
   ]},
-  { q:26, text:"Em metas, eu…", options:[
+  { q:26, text:"Em metas, eu...", options:[
     {key:"A", label:"priorizo resultados"},
     {key:"B", label:"engajo pessoas"},
     {key:"C", label:"sustento o ritmo"},
     {key:"D", label:"otimizo processos"},
   ]},
-  { q:27, text:"No planejamento, eu…", options:[
+  { q:27, text:"No planejamento, eu...", options:[
     {key:"A", label:"penso no atalho"},
     {key:"B", label:"penso no impacto"},
     {key:"C", label:"penso na continuidade"},
     {key:"D", label:"penso no método"},
   ]},
-  { q:28, text:"Quando erro, eu…", options:[
+  { q:28, text:"Quando erro, eu...", options:[
     {key:"A", label:"corrijo e sigo"},
     {key:"B", label:"compartilho lições"},
     {key:"C", label:"peço desculpas"},
@@ -186,15 +181,12 @@ const QUESTIONS = [
 ];
 
 const altToProfile = { A:"D", B:"I", C:"S", D:"C" };
-
 function classNames(...cls){ return cls.filter(Boolean).join(" "); }
 
 export default function App(){
-  const [stage, setStage] = useState("home"); // "home" | "test" | "thanks"
+  const [stage, setStage] = useState("home");
   const [sending, setSending] = useState(false);
-  const [form, setForm] = useState({
-    nome: "", email: "", whatsapp: "", answers: {},
-  });
+  const [form, setForm] = useState({ nome:"", email:"", whatsapp:"", answers:{} });
 
   const progress = useMemo(()=>{
     const answered = Object.values(form.answers).filter(Boolean).length;
@@ -230,35 +222,70 @@ export default function App(){
     if(unanswered>0){
       if(!confirm(`Faltam ${unanswered} pergunta(s). Deseja enviar assim mesmo?`)) return;
     }
+
+    // payload completo em JSON (para você/servidor)
     const payload = {
       nome: form.nome,
       email: form.email,
       whatsapp: form.whatsapp,
       scores, primario, secundario,
-      itens: QUESTIONS.map(q=>({q:q.q, resp: form.answers[q.q] || null})),
+      itens: QUESTIONS.map(q=>({ q:q.q, resp: form.answers[q.q] || null })),
       submittedAt: new Date().toISOString(),
       source: "site-disc-onepage",
     };
 
+    // payload “legível” por e-mail (FormSubmit)
+    const emailData = {
+      _subject: "Novo resultado do Teste Comportamental (site)",
+      _template: "table",
+      _captcha: "false",
+      Nome: form.nome,
+      Email_do_participante: form.email,
+      WhatsApp: form.whatsapp,
+      Perfil_Primario: primario || "",
+      Perfil_Secundario: secundario || "",
+      Pontuacao_D: String(scores.D),
+      Pontuacao_I: String(scores.I),
+      Pontuacao_S: String(scores.S),
+      Pontuacao_C: String(scores.C),
+      Respostas_JSON: JSON.stringify(payload.itens),
+    };
+
     setSending(true);
     try{
+      // envia e-mail via FormSubmit (AJAX)
+      if(EMAIL_ENDPOINT && EMAIL_ENDPOINT.includes("formsubmit.co")){
+        const fd = new FormData();
+        Object.entries(emailData).forEach(([k,v])=> fd.append(k, v));
+        const r1 = await fetch(EMAIL_ENDPOINT, {
+          method: "POST",
+          headers: { "Accept": "application/json" },
+          body: fd
+        });
+        if(!r1.ok) throw new Error("Falha ao enviar e-mail.");
+      }
+
+      // envia JSON para seu endpoint (opcional)
       if(OWNER_ENDPOINT){
-        const res = await fetch(OWNER_ENDPOINT, {
+        const r2 = await fetch(OWNER_ENDPOINT, {
           method:"POST",
           headers:{ "Content-Type":"application/json" },
           body: JSON.stringify(payload)
         });
-        if(!res.ok) throw new Error("Falha ao enviar para o servidor.");
-      } else {
-        // Fallback: baixa um JSON local
+        if(!r2.ok) throw new Error("Falha ao enviar para o servidor.");
+      }
+
+      // fallback local se nenhum destino foi configurado
+      if(!EMAIL_ENDPOINT && !OWNER_ENDPOINT){
         const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url; a.download = `resultado-${Date.now()}.json`; a.click();
         URL.revokeObjectURL(url);
       }
+
       setStage("thanks");
-      window.scrollTo({top:0, behavior:"smooth"});
+      window.scrollTo({ top:0, behavior:"smooth" });
     } catch(err){
       alert(err?.message || "Não foi possível enviar. Tente novamente.");
     } finally{
