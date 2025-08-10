@@ -7,7 +7,7 @@ import React, { useMemo, useState } from "react";
 
 const OWNER_ENDPOINT = ""; // opcional: ex. "https://script.google.com/macros/s/SEU_ID/exec"
 // 🔔 troque pelo seu e-mail para receber as respostas
-const EMAIL_ENDPOINT = "https://formsubmit.co/ajax/ef82f91d95387fdff44e428297b29048"; // ex.: joao@empresa.com
+const EMAIL_ENDPOINT = "https://formsubmit.co/ajax/puianirafael@gmail.com"; // ex.: joao@empresa.com
 
 const QUESTIONS = [
   { q:1, text:"Quando surge um desafio, eu geralmente...", options:[
